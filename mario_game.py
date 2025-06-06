@@ -6,6 +6,8 @@ import random
 WIDTH = 60
 HEIGHT = 20
 GROUND_Y = HEIGHT - 2
+FLAG_X = WIDTH - 3
+FLAG_HEIGHT = 4
 
 PLAYER_CHAR = 'M'
 DUCK_CHAR = 'm'
@@ -21,6 +23,14 @@ def draw_screen(stdscr, player_x, player_y, ducking, enemies):
     # Draw ground
     for x in range(WIDTH):
         stdscr.addch(GROUND_Y + 1, x, '-')
+    # Draw castle with flag
+    for i in range(FLAG_HEIGHT):
+        y = GROUND_Y - i
+        if 0 <= y < HEIGHT:
+            stdscr.addch(y, FLAG_X, '#')
+    flag_y = GROUND_Y - FLAG_HEIGHT
+    if 0 <= flag_y < HEIGHT:
+        stdscr.addch(flag_y, FLAG_X, 'F')
     # Draw player
     ch = DUCK_CHAR if ducking else PLAYER_CHAR
     if 0 <= player_x < WIDTH and 0 <= player_y < HEIGHT:
@@ -32,8 +42,7 @@ def draw_screen(stdscr, player_x, player_y, ducking, enemies):
     stdscr.refresh()
 
 
-def main(stdscr):
-    curses.curs_set(0)
+def play_game(stdscr):
     stdscr.nodelay(True)
     stdscr.timeout(50)
 
@@ -50,7 +59,7 @@ def main(stdscr):
     while True:
         key = stdscr.getch()
         if key in (ord('q'), ord('Q')):
-            break
+            return False
         elif key in (curses.KEY_LEFT, ord('a'), ord('A')):
             player_x = max(0, player_x - 1)
         elif key in (curses.KEY_RIGHT, ord('d'), ord('D')):
@@ -81,18 +90,38 @@ def main(stdscr):
                 stdscr.addstr(HEIGHT // 2, WIDTH // 2 - 5, "Game Over!")
                 stdscr.refresh()
                 time.sleep(2)
-                return
+                return True
 
         # Check win
-        if player_x >= WIDTH - 2:
+        if player_x >= FLAG_X - 1:
             stdscr.addstr(HEIGHT // 2, WIDTH // 2 - 4, "You Win!")
             stdscr.refresh()
             time.sleep(2)
-            return
+            return True
 
         draw_screen(stdscr, player_x, player_y, ducking, enemies)
         time.sleep(0.05)
 
+
+def main(stdscr):
+    curses.curs_set(0)
+    while True:
+        result = play_game(stdscr)
+        if result is False:
+            break
+        stdscr.nodelay(False)
+        msg = "Press Enter to play again or 'q' to quit"
+        stdscr.addstr(HEIGHT // 2 + 1, WIDTH // 2 - len(msg)//2, msg)
+        stdscr.refresh()
+        while True:
+            key = stdscr.getch()
+            if key in (ord('q'), ord('Q')):
+                return
+            if key in (curses.KEY_ENTER, 10, 13):
+                break
+        stdscr.clear()
+        stdscr.nodelay(True)
+        
 
 if __name__ == '__main__':
     curses.wrapper(main)
