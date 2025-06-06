@@ -1,98 +1,119 @@
-import curses
-import time
-import random
+import tkinter as tk
 
-# Game dimensions
-WIDTH = 60
-HEIGHT = 20
-GROUND_Y = HEIGHT - 2
-
-PLAYER_CHAR = 'M'
-DUCK_CHAR = 'm'
-ENEMY_CHAR = 'E'
-
+WIDTH = 800
+HEIGHT = 300
+GROUND_Y = 250
+PLAYER_SIZE = 20
+ENEMY_SIZE = 20
 GRAVITY = 1
-JUMP_VELOCITY = -4
+JUMP_VELOCITY = -15
+ENEMY_SPEED = -5
 
-def draw_screen(stdscr, player_x, player_y, ducking, enemies):
-    stdscr.clear()
-    # Draw instructions
-    stdscr.addstr(0, 0, "Arrows/WASD to move, 's' to duck, 'q' to quit")
-    # Draw ground
-    for x in range(WIDTH):
-        stdscr.addch(GROUND_Y + 1, x, '-')
-    # Draw player
-    ch = DUCK_CHAR if ducking else PLAYER_CHAR
-    if 0 <= player_x < WIDTH and 0 <= player_y < HEIGHT:
-        stdscr.addch(player_y, player_x, ch)
-    # Draw enemies
-    for ex, ey in enemies:
-        if 0 <= ex < WIDTH and 0 <= ey < HEIGHT:
-            stdscr.addch(ey, ex, ENEMY_CHAR)
-    stdscr.refresh()
+class MarioGame:
+    def __init__(self, root):
+        self.root = root
+        self.canvas = tk.Canvas(root, width=WIDTH, height=HEIGHT, bg='skyblue')
+        self.canvas.pack()
 
+        self.player_x = 20
+        self.player_y = GROUND_Y
+        self.player_vy = 0
+        self.is_jumping = False
+        self.is_ducking = False
 
-def main(stdscr):
-    curses.curs_set(0)
-    stdscr.nodelay(True)
-    stdscr.timeout(50)
+        # Draw player and ground
+        self.ground = self.canvas.create_rectangle(0, GROUND_Y + PLAYER_SIZE, WIDTH, HEIGHT, fill='green')
+        self.player = self.canvas.create_rectangle(self.player_x, self.player_y - PLAYER_SIZE,
+                                                   self.player_x + PLAYER_SIZE, self.player_y,
+                                                   fill='red')
 
-    player_x = 2
-    player_y = GROUND_Y
-    player_vy = 0
-    ducking = False
+        # Enemies
+        self.enemies = [
+            self.canvas.create_rectangle(WIDTH + 100, GROUND_Y - ENEMY_SIZE,
+                                          WIDTH + 100 + ENEMY_SIZE, GROUND_Y,
+                                          fill='black'),
+            self.canvas.create_rectangle(WIDTH + 300, GROUND_Y - ENEMY_SIZE,
+                                          WIDTH + 300 + ENEMY_SIZE, GROUND_Y,
+                                          fill='black')
+        ]
 
-    enemies = [
-        [WIDTH + 10, GROUND_Y],
-        [WIDTH + 30, GROUND_Y]
-    ]
+        self.bind_keys()
+        self.update()
 
-    while True:
-        key = stdscr.getch()
-        if key in (ord('q'), ord('Q')):
-            break
-        elif key in (curses.KEY_LEFT, ord('a'), ord('A')):
-            player_x = max(0, player_x - 1)
-        elif key in (curses.KEY_RIGHT, ord('d'), ord('D')):
-            player_x = min(WIDTH - 1, player_x + 1)
-        elif key in (curses.KEY_UP, ord('w'), ord('W'), ord(' ')):
-            if player_y == GROUND_Y and not ducking:
-                player_vy = JUMP_VELOCITY
-        elif key in (curses.KEY_DOWN, ord('s'), ord('S')):
-            ducking = not ducking
+    def bind_keys(self):
+        self.root.bind('<KeyPress>', self.on_key_press)
+        self.root.bind('<KeyRelease>', self.on_key_release)
 
-        # Apply gravity
-        if player_y < GROUND_Y or player_vy < 0:
-            player_vy += GRAVITY
-            player_y += player_vy
-            if player_y >= GROUND_Y:
-                player_y = GROUND_Y
-                player_vy = 0
+    def on_key_press(self, event):
+        key = event.keysym.lower()
+        if key in ('left', 'a'):
+            self.player_x -= 5
+        elif key in ('right', 'd'):
+            self.player_x += 5
+        elif key in ('up', 'w') and not self.is_jumping and not self.is_ducking:
+            self.player_vy = JUMP_VELOCITY
+            self.is_jumping = True
+        elif key in ('down', 's'):
+            self.is_ducking = True
+            self.canvas.coords(self.player, self.player_x, self.player_y - PLAYER_SIZE/2,
+                               self.player_x + PLAYER_SIZE, self.player_y)
 
-        # Move enemies
-        for enemy in enemies:
-            enemy[0] -= 1
-            if enemy[0] < 0:
-                enemy[0] = WIDTH + random.randint(5, 15)
+    def on_key_release(self, event):
+        key = event.keysym.lower()
+        if key in ('down', 's'):
+            self.is_ducking = False
+            self.canvas.coords(self.player, self.player_x, self.player_y - PLAYER_SIZE,
+                               self.player_x + PLAYER_SIZE, self.player_y)
 
-        # Check collision
-        for ex, ey in enemies:
-            if ex == player_x and ey == player_y:
-                stdscr.addstr(HEIGHT // 2, WIDTH // 2 - 5, "Game Over!")
-                stdscr.refresh()
-                time.sleep(2)
-                return
+    def move_enemies(self):
+        for enemy in self.enemies:
+            self.canvas.move(enemy, ENEMY_SPEED, 0)
+            ex1, ey1, ex2, ey2 = self.canvas.coords(enemy)
+            if ex2 < 0:
+                self.canvas.move(enemy, WIDTH + random.randint(50, 150), 0)
 
-        # Check win
-        if player_x >= WIDTH - 2:
-            stdscr.addstr(HEIGHT // 2, WIDTH // 2 - 4, "You Win!")
-            stdscr.refresh()
-            time.sleep(2)
-            return
+    def check_collision(self):
+        px1, py1, px2, py2 = self.canvas.coords(self.player)
+        for enemy in self.enemies:
+            ex1, ey1, ex2, ey2 = self.canvas.coords(enemy)
+            if px2 > ex1 and px1 < ex2 and py2 > ey1 and py1 < ey2:
+                self.game_over("Game Over!")
+                return True
+        return False
 
-        draw_screen(stdscr, player_x, player_y, ducking, enemies)
-        time.sleep(0.05)
+    def check_win(self):
+        px1, _, px2, _ = self.canvas.coords(self.player)
+        if px2 >= WIDTH:
+            self.game_over("You Win!")
+            return True
+        return False
 
+    def game_over(self, msg):
+        self.canvas.create_text(WIDTH/2, HEIGHT/2, text=msg, font=('Arial', 24), fill='yellow')
+
+    def update(self):
+        # Gravity
+        if self.is_jumping:
+            self.player_vy += GRAVITY
+            self.player_y += self.player_vy
+            if self.player_y >= GROUND_Y:
+                self.player_y = GROUND_Y
+                self.player_vy = 0
+                self.is_jumping = False
+        # Update player position
+        self.canvas.coords(self.player, self.player_x,
+                           self.player_y - (PLAYER_SIZE/2 if self.is_ducking else PLAYER_SIZE),
+                           self.player_x + PLAYER_SIZE,
+                           self.player_y)
+
+        self.move_enemies()
+
+        if not self.check_collision() and not self.check_win():
+            self.root.after(20, self.update)
 
 if __name__ == '__main__':
-    curses.wrapper(main)
+    import random
+    root = tk.Tk()
+    root.title('Simple Mario Game')
+    game = MarioGame(root)
+    root.mainloop()
