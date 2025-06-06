@@ -21,6 +21,8 @@ class MarioGame:
         self.is_jumping = False
         self.is_ducking = False
 
+        self.after_id = None
+
         # Draw player and ground
         self.ground = self.canvas.create_rectangle(0, GROUND_Y + PLAYER_SIZE, WIDTH, HEIGHT, fill='green')
         self.player = self.canvas.create_rectangle(self.player_x, self.player_y - PLAYER_SIZE,
@@ -37,8 +39,23 @@ class MarioGame:
                                           fill='black')
         ]
 
+        self.draw_goal()
+
         self.bind_keys()
         self.update()
+
+    def draw_goal(self):
+        base_width = 40
+        base_height = 60
+        left = WIDTH - base_width
+        top = GROUND_Y - base_height
+        self.castle = self.canvas.create_rectangle(left, top, WIDTH, GROUND_Y, fill='brown')
+        pole_height = 50
+        pole_x = left + base_width/2
+        self.flagpole = self.canvas.create_line(pole_x, top, pole_x, top - pole_height, width=3, fill='black')
+        self.flag = self.canvas.create_polygon(pole_x, top - pole_height, pole_x, top - pole_height + 20,
+                                              WIDTH, top - pole_height + 10, fill='red')
+        self.goal_x1 = left
 
     def bind_keys(self):
         self.root.bind('<KeyPress>', self.on_key_press)
@@ -46,6 +63,9 @@ class MarioGame:
 
     def on_key_press(self, event):
         key = event.keysym.lower()
+        if key == 'r':
+            self.restart_game()
+            return
         if key in ('left', 'a'):
             self.player_x -= 5
         elif key in ('right', 'd'):
@@ -65,6 +85,33 @@ class MarioGame:
             self.canvas.coords(self.player, self.player_x, self.player_y - PLAYER_SIZE,
                                self.player_x + PLAYER_SIZE, self.player_y)
 
+    def restart_game(self):
+        if self.after_id:
+            self.root.after_cancel(self.after_id)
+            self.after_id = None
+        self.canvas.delete('all')
+
+        self.player_x = 20
+        self.player_y = GROUND_Y
+        self.player_vy = 0
+        self.is_jumping = False
+        self.is_ducking = False
+
+        self.ground = self.canvas.create_rectangle(0, GROUND_Y + PLAYER_SIZE, WIDTH, HEIGHT, fill='green')
+        self.player = self.canvas.create_rectangle(self.player_x, self.player_y - PLAYER_SIZE,
+                                                   self.player_x + PLAYER_SIZE, self.player_y,
+                                                   fill='red')
+        self.enemies = [
+            self.canvas.create_rectangle(WIDTH + 100, GROUND_Y - ENEMY_SIZE,
+                                          WIDTH + 100 + ENEMY_SIZE, GROUND_Y,
+                                          fill='black'),
+            self.canvas.create_rectangle(WIDTH + 300, GROUND_Y - ENEMY_SIZE,
+                                          WIDTH + 300 + ENEMY_SIZE, GROUND_Y,
+                                          fill='black')
+        ]
+        self.draw_goal()
+        self.update()
+
     def move_enemies(self):
         for enemy in self.enemies:
             self.canvas.move(enemy, ENEMY_SPEED, 0)
@@ -82,8 +129,8 @@ class MarioGame:
         return False
 
     def check_win(self):
-        px1, _, px2, _ = self.canvas.coords(self.player)
-        if px2 >= WIDTH:
+        px1, py1, px2, py2 = self.canvas.coords(self.player)
+        if px2 >= self.goal_x1:
             self.game_over("You Win!")
             return True
         return False
@@ -109,7 +156,9 @@ class MarioGame:
         self.move_enemies()
 
         if not self.check_collision() and not self.check_win():
-            self.root.after(20, self.update)
+            self.after_id = self.root.after(20, self.update)
+        else:
+            self.after_id = None
 
 if __name__ == '__main__':
     import random
